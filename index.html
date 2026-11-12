@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src https://api.openai.com https://api.dropboxapi.com https://content.dropboxapi.com; base-uri 'none'; form-action 'none'">
+<title>Gestione pneumatici</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:10px;font-family:system-ui,sans-serif;background:#fff;color:#111;max-width:640px;margin-inline:auto}
+h1{font-size:22px;color:#0d47a1;text-align:center;margin:6px 0 10px}
+h2{font-size:16px;margin:0 0 8px;color:#0d47a1}
+.f{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;min-width:0}
+.f>span{font-weight:700;color:#0d47a1;font-size:14px}
+input[type=text],input[type=tel],input[type=password],select{width:100%;height:52px;font-size:22px;padding:0 10px;border:1px solid #aaa;border-radius:10px;background:#fff;text-transform:uppercase}
+input[type=password]{text-transform:none}
+input:focus,select:focus,button:focus-visible{outline:3px solid #1e88e5}
+input[readonly]{background:#e9ecef}
+#targa{height:62px;font-size:30px;font-weight:700;letter-spacing:2px}
+.blk{border-radius:12px;padding:10px;margin-bottom:12px}
+.tg{background:#e8eaf6}.vc{background:#eceff1}.ru{background:#ede7f6}.an{background:#dcedfb}.po{background:#e0f2e3}
+.r2,.r3{display:grid;gap:8px}
+.r2{grid-template-columns:1fr 1fr}
+.r3{grid-template-columns:1fr 1fr 1fr}
+.chk{display:flex;align-items:center;justify-content:center;gap:6px;height:52px;border:1px solid #aaa;border-radius:10px;background:#fff;font-weight:700;font-size:18px}
+.chk input{width:24px;height:24px}
+.loc{display:flex;gap:6px}
+button{font-size:17px;font-weight:700;border:0;border-radius:10px;padding:12px 14px;color:#fff;background:#1565c0;cursor:pointer}
+.grigio{background:#546e7a}.verde{background:#2e7d32}.rosso{background:#c62828}
+button:disabled{opacity:.5}
+.barra{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+.stato{font-weight:700;font-size:14px}
+.grande{width:100%;height:66px;font-size:22px;margin:6px 0}
+.dep{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.dep button{height:66px;font-size:19px;background:#cfd8dc;color:#37474f}
+.dep button.on{color:#fff}
+#bDep.on{background:#1565c0}#bSen.on{background:#455a64}
+#toast{position:fixed;left:10px;right:10px;bottom:14px;padding:14px;border-radius:10px;color:#fff;font-size:18px;font-weight:700;text-align:center;display:none;z-index:10}
+details{border:1px solid #ccc;border-radius:10px;padding:8px 10px;margin-bottom:10px}
+summary{font-weight:700;color:#0d47a1}
+dialog{border:0;border-radius:12px;padding:12px;max-width:340px;width:94%}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.gr{display:grid;grid-template-columns:34px repeat(4,1fr);gap:4px;margin-bottom:4px;align-items:center}
+.gr b{color:#0d47a1;text-align:right}
+.gr button{padding:10px 0;font-size:15px}
+.nota{font-size:13px;color:#555;margin:6px 0}
+</style>
+</head>
+<body>
+<h1>Gestione pneumatici</h1>
+
+<details>
+  <summary>Impostazioni</summary>
+  <label class="f"><span>Chiave OpenAI (resta solo su questo telefono)</span><input type="password" id="cfgKey" autocomplete="off"></label>
+  <label class="f"><span>Modello AI</span>
+    <select id="cfgModel"><option value="gpt-4o-mini">gpt-4o-mini (economico)</option><option value="gpt-4o">gpt-4o (più preciso, costa di più)</option></select>
+  </label>
+  <button id="btnCfg" class="verde">Salva impostazioni</button>
+  <p class="nota">Schede salvate sul telefono: <b id="nSalvate">0</b></p>
+  <div class="barra">
+    <button id="btnXlsx" class="grigio">Scarica Excel</button>
+    <button id="btnBackup" class="grigio">Copia di sicurezza</button>
+    <button id="btnRipristina" class="grigio">Ripristina copia</button>
+  </div>
+  <input type="file" id="fileRipristina" accept="application/json,.json" hidden>
+</details>
+
+<div class="r2">
+  <label class="f"><span>Data</span><input type="text" id="data" readonly></label>
+  <label class="f"><span>Ora</span><input type="text" id="ora" readonly></label>
+</div>
+
+<div class="blk tg">
+  <label class="f"><span>Targa</span><input type="text" id="targa" autocapitalize="characters" autocomplete="off"></label>
+  <div class="barra">
+    <button id="btnScatta">Scatta foto</button>
+    <button id="btnGalleria" class="grigio">Da galleria</button>
+    <button id="btnAnalizza" class="verde">Analizza</button>
+    <button id="btnSvuota" class="rosso">Svuota</button>
+  </div>
+  <div class="stato" id="statoCoda">Foto in coda: 0</div>
+  <input type="file" id="fileScatta" accept="image/*" capture="environment" hidden>
+  <input type="file" id="fileGalleria" accept="image/*" multiple hidden>
+</div>
+
+<div class="dep">
+  <button id="bDep" type="button">Deposito</button>
+  <button id="bSen" type="button">Senza deposito</button>
+</div>
+
+<div class="blk vc">
+  <h2>Cliente e veicolo</h2>
+  <label class="f"><span>Cliente</span><input type="text" id="cliente" autocomplete="off"></label>
+  <label class="f"><span>Marca e modello auto</span><input type="text" id="auto" autocomplete="off"></label>
+  <label class="f"><span>KM</span><input type="tel" id="km"></label>
+</div>
+
+<div class="blk ru">
+  <h2>Ruote</h2>
+  <div class="r3">
+    <label class="f"><span>Quantità</span>
+      <select id="qta"><option value=""></option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+    <label class="f"><span>Stagione</span>
+      <select id="stagione"><option>ESTIVO</option><option>INVERNALE</option><option>4 STAGIONI</option></select></label>
+    <label class="f"><span>Tipo ruota</span>
+      <select id="tipo"><option value=""></option><option>PNEUMATICO</option><option>RUOTA ACCIAIO</option><option>RUOTA IN LEGA</option></select></label>
+  </div>
+  <div class="r3">
+    <label class="f" id="boxLoc"><span>Locazione</span>
+      <div class="loc"><input type="text" id="loc" placeholder="ES. GA1" autocomplete="off"><button id="btnGriglia" class="grigio" type="button">▦</button></div></label>
+    <div class="f"><span>XL</span><label class="chk"><input type="checkbox" id="xl"> XL</label></div>
+    <div class="f"><span>TPMS</span><label class="chk"><input type="checkbox" id="tpms"> TPMS</label></div>
+  </div>
+</div>
+
+<div class="blk an">
+  <h2>Anteriori</h2>
+  <label class="f"><span>Misura</span><input type="text" id="misuraAnt" autocomplete="off"></label>
+  <label class="f"><span>Marca e modello</span><input type="text" id="marcaAnt" autocomplete="off"></label>
+  <div class="r3">
+    <label class="f"><span>SX (mm)</span><input type="tel" id="antSx"></label>
+    <label class="f"><span>DOT</span><input type="text" id="dotAnt" autocomplete="off"></label>
+    <label class="f"><span>DX (mm)</span><input type="tel" id="antDx"></label>
+  </div>
+</div>
+
+<div class="blk po">
+  <h2>Posteriori</h2>
+  <label class="f"><span>Misura</span><input type="text" id="misuraPost" autocomplete="off"></label>
+  <label class="f"><span>Marca e modello</span><input type="text" id="marcaPost" autocomplete="off"></label>
+  <div class="r3">
+    <label class="f"><span>SX (mm)</span><input type="tel" id="postSx"></label>
+    <label class="f"><span>DOT</span><input type="text" id="dotPost" autocomplete="off"></label>
+    <label class="f"><span>DX (mm)</span><input type="tel" id="postDx"></label>
+  </div>
+</div>
+
+<button id="btnSalva" class="grande">Salva scheda</button>
+<button id="btnNuova" class="grande grigio">Nuova scheda</button>
+
+<dialog id="dlgLoc">
+  <div style="font-weight:700;margin-bottom:8px">Seleziona locazione</div>
+  <div id="grigliaLoc" style="max-height:60vh;overflow:auto"></div>
+  <button id="btnChiudiLoc" class="grigio" style="width:100%;margin-top:8px">Annulla</button>
+</dialog>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const INTEST=["Data","Ora","Targa","KM","Cliente","Marca/Modello Auto","Quantità","Stagione","Tipo Ruota","Locazione","XL","TPMS","Misura Ant","Marca Ant","Ant SX (mm)","DOT Ant","Ant DX (mm)","Post SX (mm)","DOT Post","Post DX (mm)","Misura Post","Marca Post","Deposito"];
+const KEYS=["data","ora","targa","km","cliente","auto","qta","stagione","tipo","loc","xl","tpms","misuraAnt","marcaAnt","antSx","dotAnt","antDx","postSx","dotPost","postDx","misuraPost","marcaPost","deposito"];
+const SP=["antSx","antDx","postSx","postDx"];
+const GOMME=["qta","tipo","loc","xl","tpms","misuraAnt","marcaAnt","dotAnt","misuraPost","marcaPost","dotPost",...SP];
+
+function leggi(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}}
+function scrivi(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){toast("ERRORE: memoria del telefono piena o bloccata","err");return false}}
+let archivio=leggi("archivio",[]);
+let cfg=leggi("cfg",{key:"",model:"gpt-4o-mini"});
+let coda=[],inAnalisi=false,dep="";
+
+let tToast;
+function toast(testo,tipo){
+  const t=$("toast");t.textContent=testo;
+  t.style.background=tipo==="err"?"#c62828":tipo==="avv"?"#ef6c00":tipo==="info"?"#1565c0":"#2e7d32";
+  t.style.display="block";clearTimeout(tToast);tToast=setTimeout(()=>{t.style.display="none"},4500);
+}
+function stagioneCorrente(){
+  const d=new Date(),m=d.getMonth()+1,g=d.getDate();
+  return (m===10&&g>=15)||[11,12,1,2,3].includes(m)||(m===4&&g<15)?"INVERNALE":"ESTIVO";
+}
+function aggiornaDataOra(){
+  const o=new Date();
+  $("data").value=o.toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric"});
+  $("ora").value=o.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+}
+function setVal(k,v){
+  if(k==="xl"||k==="tpms")$(k).checked=["SÌ","SI","TRUE","1"].includes(String(v).toUpperCase());
+  else $(k).value=String(v??"").toUpperCase();
+}
+function setDep(v){
+  dep=v;
+  $("bDep").classList.toggle("on",v==="SÌ");
+  $("bSen").classList.toggle("on",v==="NO");
+  $("boxLoc").style.display=v==="NO"?"none":"";
+  if(v==="NO")$("loc").value="";
+}
+function leggiScheda(){
+  aggiornaDataOra();
+  const r={};
+  for(const k of KEYS){
+    if(k==="deposito")r[k]=dep;
+    else if(k==="xl"||k==="tpms")r[k]=$(k).checked?"SÌ":"NO";
+    else r[k]=($(k).value||"").trim().toUpperCase();
+  }
+  r.ts=Date.now();
+  return r;
+}
+function aggiornaStato(){
+  $("statoCoda").textContent="Foto in coda: "+coda.length;
+  $("nSalvate").textContent=archivio.length;
+}
+function scarica(blob,nome){
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
+// Ricerca per targa: prende la riga della stagione scelta (o 4 stagioni)
+function cerca(pulisci){
+  const targa=$("targa").value.toUpperCase().replace(/\s/g,"");
+  $("targa").value=targa;
+  if(!targa)return;
+  const tutte=archivio.filter(r=>(r.targa||"").toUpperCase()===targa).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(!tutte.length){toast("TARGA NUOVA: scegli Deposito o Senza deposito","info");return;}
+  const st=$("stagione").value;
+  const r=tutte.find(x=>x.stagione===st)||tutte.find(x=>x.stagione==="4 STAGIONI");
+  if(r){
+    for(const k of KEYS){if(!["data","ora","km","targa","deposito",...SP].includes(k))setVal(k,r[k]);}
+    for(const k of SP)$(k).value="";
+    setDep(r.deposito||"SÌ");
+    toast("SCHEDA "+r.stagione+" CARICATA: misura di nuovo gli spessori","info");
+  }else{
+    const a=tutte[0];
+    setVal("cliente",a.cliente);setVal("auto",a.auto);setDep(a.deposito||"SÌ");
+    if(pulisci)for(const k of GOMME)setVal(k,"");
+    toast("NESSUNA SCHEDA "+st+" PER "+targa+": caricati solo cliente e auto","avv");
+  }
+}
+
+// Salvataggio: una riga per targa + stagione (sovrascrive se esiste)
+function salva(){
+  const r=leggiScheda();
+  if(!r.targa){toast("INSERISCI ALMENO LA TARGA","avv");return;}
+  if(!r.deposito){toast("SCEGLI DEPOSITO O SENZA DEPOSITO","avv");return;}
+  const i=archivio.findIndex(x=>x.targa===r.targa&&x.stagione===r.stagione);
+  const vecchia=i>=0?archivio[i]:null;
+  if(i>=0)archivio[i]=r;else archivio.push(r);
+  if(scrivi("archivio",archivio)){aggiornaStato();toast(i>=0?"SCHEDA AGGIORNATA SUL TELEFONO":"SCHEDA SALVATA SUL TELEFONO");}
+  else if(vecchia)archivio[i]=vecchia;else archivio.pop();
+}
+function nuova(){
+  for(const k of KEYS){
+    if(k==="xl"||k==="tpms")$(k).checked=false;
+    else if(!["data","ora","deposito"].includes(k))$(k).value="";
+  }
+  setDep("");
+  $("stagione").value=stagioneCorrente();
+  aggiornaDataOra();
+  window.scrollTo(0,0);
+}
+
+async function ridimensiona(file){
+  const bmp=await createImageBitmap(file);
+  const s=Math.min(1,1280/Math.max(bmp.width,bmp.height));
+  const c=document.createElement("canvas");
+  c.width=Math.round(bmp.width*s);c.height=Math.round(bmp.height*s);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",0.85);
+}
+async function aggiungiFoto(input){
+  for(const f of Array.from(input.files)){
+    try{coda.push(await ridimensiona(f))}catch(e){toast("Foto non leggibile: "+f.name,"err")}
+  }
+  input.value="";aggiornaStato();
+}
+const PROMPT=
+"Analizza questa sequenza di foto del veicolo, documenti o pneumatici.\n"+
+"ATTENZIONE: la marca dello pneumatico è ESCLUSIVAMENTE la marca della gomma (Michelin, Pirelli, Continental, Goodyear, Bridgestone, ecc.). Ignora loghi di auto o cerchi.\n"+
+"ASSEGNAZIONE: le prime foto riguardano l'ASSE ANTERIORE, quelle successive (se presenti) l'ASSE POSTERIORE. Se mancano foto del posteriore lascia vuoti i campi del posteriore, NON dedurli.\n\n"+
+"Restituisci un unico JSON con queste chiavi esatte: targa, cliente, marca_auto, misura_ant, marca_ant, dot_ant, ant_sx, ant_dx, misura_post, marca_post, dot_post, post_sx, post_dx.\n"+
+'Usa stringa vuota "" se non rilevabile. NON inventare e NON indovinare: scrivi solo ciò che è leggibile con certezza nelle foto. '+
+'Per "marca_ant" e "marca_post" riporta marca e modello esattamente come sono scritti sul fianco dello pneumatico; se non sono ben leggibili lascia vuoto.';
+
+async function analizza(){
+  if(inAnalisi)return;
+  if(!coda.length){toast("AGGIUNGI ALMENO UNA FOTO ALLA CODA!","avv");return;}
+  if(!cfg.key){toast("INSERISCI LA CHIAVE OPENAI NELLE IMPOSTAZIONI","avv");return;}
+  inAnalisi=true;$("btnAnalizza").disabled=true;
+  $("statoCoda").textContent="Analisi di "+coda.length+" foto in corso...";
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),90000);
+  try{
+    const contenuto=[{type:"text",text:PROMPT}];
+    for(const url of coda)contenuto.push({type:"image_url",image_url:{url}});
+    const resp=await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},
+      body:JSON.stringify({model:cfg.model||"gpt-4o-mini",
+        messages:[{role:"system",content:"Sei un assistente tecnico per officina gommista esperto in catalogazione."},{role:"user",content:contenuto}],
+        response_format:{type:"json_object"},max_tokens:600}),
+      signal:ctrl.signal});
+    const j=await resp.json();
+    if(!resp.ok)throw new Error((j.error&&j.error.message)||("Errore "+resp.status));
+    const d=JSON.parse(j.choices[0].message.content);
+    const v=k=>String(d[k]??"").trim();
+    if(v("targa")){$("targa").value=v("targa").toUpperCase().replace(/\s/g,"");cerca(false);}
+    if(v("cliente"))setVal("cliente",v("cliente"));
+    if(v("marca_auto"))setVal("auto",v("marca_auto"));
+    if(v("misura_ant")){setVal("misuraAnt",v("misura_ant"));setVal("misuraPost",v("misura_ant"));}
+    if(v("marca_ant")){setVal("marcaAnt",v("marca_ant"));setVal("marcaPost",v("marca_ant"));}
+    if(v("dot_ant")){setVal("dotAnt",v("dot_ant"));setVal("dotPost",v("dot_ant"));}
+    if(v("ant_sx"))setVal("antSx",v("ant_sx"));
+    if(v("ant_dx"))setVal("antDx",v("ant_dx"));
+    if(v("misura_post"))setVal("misuraPost",v("misura_post"));
+    if(v("marca_post"))setVal("marcaPost",v("marca_post"));
+    if(v("dot_post"))setVal("dotPost",v("dot_post"));
+    if(v("post_sx"))setVal("postSx",v("post_sx"));
+    if(v("post_dx"))setVal("postDx",v("post_dx"));
+    coda=[];toast("SCHEDA COMPILATA DA FOTO!");
+  }catch(e){
+    toast("ERRORE ANALISI FOTO: "+(e.name==="AbortError"?"Tempo scaduto: riprova":e.message),"err");
+  }finally{
+    clearTimeout(timer);inAnalisi=false;$("btnAnalizza").disabled=false;aggiornaStato();
+  }
+}
+
+// ---- Excel (.xlsx scritto a mano, senza librerie)
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zipStore(files){
+  const enc=new TextEncoder(),loc=[],cen=[];let off=0;
+  for(const f of files){
+    const n=enc.encode(f.name),d=f.data,crc=crc32(d);
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);
+    h.setUint16(8,0,true);h.setUint16(10,0,true);h.setUint16(12,33,true);
+    h.setUint32(14,crc,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);
+    h.setUint16(26,n.length,true);h.setUint16(28,0,true);
+    loc.push(new Uint8Array(h.buffer),n,d);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+    c.setUint16(10,0,true);c.setUint16(12,0,true);c.setUint16(14,33,true);
+    c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);
+    c.setUint16(28,n.length,true);c.setUint16(30,0,true);c.setUint16(32,0,true);
+    c.setUint16(34,0,true);c.setUint16(36,0,true);c.setUint32(38,0,true);c.setUint32(42,off,true);
+    cen.push(new Uint8Array(c.buffer),n);
+    off+=30+n.length+d.length;
+  }
+  const cenSize=cen.reduce((s,x)=>s+x.length,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(4,0,true);e.setUint16(6,0,true);
+  e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);
+  e.setUint32(12,cenSize,true);e.setUint32(16,off,true);e.setUint16(20,0,true);
+  const parts=[...loc,...cen,new Uint8Array(e.buffer)];
+  const out=new Uint8Array(parts.reduce((s,x)=>s+x.length,0));let p=0;
+  for(const x of parts){out.set(x,p);p+=x.length}
+  return out;
+}
+function colL(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
+function esc(s){return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function creaXlsx(righe){
+  const enc=new TextEncoder();let rows="";
+  righe.forEach((r,ri)=>{
+    let cells="";
+    r.forEach((v,ci)=>{
+      const t=String(v??"");
+      if(t!=="")cells+='<c r="'+colL(ci)+(ri+1)+'" t="inlineStr"><is><t xml:space="preserve">'+esc(t)+"</t></is></c>";
+    });
+    rows+='<row r="'+(ri+1)+'">'+cells+"</row>";
+  });
+  const head='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const pkg="http://schemas.openxmlformats.org/package/2006/relationships";
+  const files=[
+    {name:"[Content_Types].xml",x:head+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'},
+    {name:"_rels/.rels",x:head+'<Relationships xmlns="'+pkg+'"><Relationship Id="rId1" Type="'+rel+'/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:"xl/workbook.xml",x:head+'<workbook xmlns="'+ns+'" xmlns:r="'+rel+'"><sheets><sheet name="Pneumatici" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+    {name:"xl/_rels/workbook.xml.rels",x:head+'<Relationships xmlns="'+pkg+'"><Relationship Id="rId1" Type="'+rel+'/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'},
+    {name:"xl/worksheets/sheet1.xml",x:head+'<worksheet xmlns="'+ns+'"><sheetData>'+rows+"</sheetData></worksheet>"}
+  ].map(f=>({name:f.name,data:enc.encode(f.x)}));
+  return zipStore(files);
+}
+function esportaExcel(){
+  if(!archivio.length){toast("NESSUNA SCHEDA SALVATA","avv");return;}
+  const righe=[INTEST,...archivio.map(r=>KEYS.map(k=>k==="deposito"?(r[k]||"SÌ"):(r[k]??"")))];
+  scarica(new Blob([creaXlsx(righe)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),"archivio_pneumatici.xlsx");
+}
+function backup(){scarica(new Blob([JSON.stringify(archivio)],{type:"application/json"}),"backup_pneumatici.json")}
+async function ripristina(file){
+  try{
+    const dati=JSON.parse(await file.text());
+    if(!Array.isArray(dati))throw new Error("file non valido");
+    const presenti=new Set(archivio.map(r=>r.ts));let n=0;
+    for(const r of dati){if(r&&r.targa!==undefined&&!presenti.has(r.ts)){archivio.push(r);n++}}
+    archivio.sort((a,b)=>(a.ts||0)-(b.ts||0));
+    scrivi("archivio",archivio);aggiornaStato();toast("RIPRISTINATE "+n+" SCHEDE");
+  }catch(e){toast("ERRORE RIPRISTINO: "+e.message,"err")}
+}
+
+const LETTERE=["GA","GB","GC","GD","GE","GF","GG","GH","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GV","GZ"];
+function costruisciGriglia(){
+  const g=$("grigliaLoc");
+  for(const l of LETTERE){
+    const riga=document.createElement("div");riga.className="gr";
+    const b=document.createElement("b");b.textContent=l;riga.appendChild(b);
+    for(let n=1;n<=4;n++){
+      const bt=document.createElement("button");bt.type="button";bt.textContent=l+n;
+      bt.addEventListener("click",()=>{$("loc").value=l+n;$("dlgLoc").close()});
+      riga.appendChild(bt);
+    }
+    g.appendChild(riga);
+  }
+}
+
+function avvia(){
+  costruisciGriglia();
+  $("cfgKey").value=cfg.key||"";
+  $("cfgModel").value=cfg.model||"gpt-4o-mini";
+  $("stagione").value=stagioneCorrente();
+  aggiornaDataOra();aggiornaStato();
+  $("btnCfg").addEventListener("click",()=>{
+    cfg={key:$("cfgKey").value.trim(),model:$("cfgModel").value};
+    if(scrivi("cfg",cfg))toast("IMPOSTAZIONI SALVATE");
+  });
+  $("btnScatta").addEventListener("click",()=>$("fileScatta").click());
+  $("btnGalleria").addEventListener("click",()=>$("fileGalleria").click());
+  $("fileScatta").addEventListener("change",e=>aggiungiFoto(e.target));
+  $("fileGalleria").addEventListener("change",e=>aggiungiFoto(e.target));
+  $("btnAnalizza").addEventListener("click",analizza);
+  $("btnSvuota").addEventListener("click",()=>{coda=[];aggiornaStato()});
+  $("btnSalva").addEventListener("click",salva);
+  $("btnNuova").addEventListener("click",nuova);
+  $("btnXlsx").addEventListener("click",esportaExcel);
+  $("btnBackup").addEventListener("click",backup);
+  $("btnRipristina").addEventListener("click",()=>$("fileRipristina").click());
+  $("fileRipristina").addEventListener("change",e=>{if(e.target.files[0])ripristina(e.target.files[0]);e.target.value=""});
+  $("targa").addEventListener("blur",()=>cerca(false));
+  $("stagione").addEventListener("change",()=>cerca(true));
+  $("bDep").addEventListener("click",()=>setDep("SÌ"));
+  $("bSen").addEventListener("click",()=>setDep("NO"));
+  $("btnGriglia").addEventListener("click",()=>$("dlgLoc").showModal());
+  $("btnChiudiLoc").addEventListener("click",()=>$("dlgLoc").close());
+  $("misuraAnt").addEventListener("input",()=>{$("misuraPost").value=$("misuraAnt").value});
+  $("marcaAnt").addEventListener("input",()=>{$("marcaPost").value=$("marcaAnt").value});
+  $("dotAnt").addEventListener("input",()=>{$("dotPost").value=$("dotAnt").value});
+}
+avvia();
+</script>
+</body>
+</html>

@@ -45,6 +45,9 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .gr b{color:#0d47a1;text-align:right}
 .gr button{padding:10px 0;font-size:15px}
 .nota{font-size:13px;color:#555;margin:6px 0}
+.pre{background:#fff59d!important}
+.arr{background:#0d47a1;color:#fff;border-radius:12px;padding:12px;font-size:22px;font-weight:700;margin-bottom:12px;text-align:center}
+#mMon.on,#mTol.on{background:#1565c0;color:#fff}
 </style>
 </head>
 <body>
@@ -84,6 +87,11 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   <input type="file" id="fileGalleria" accept="image/*" multiple hidden>
 </div>
 
+<div id="arrivo" class="arr" style="display:none"></div>
+<div class="dep">
+  <button id="mMon" type="button">Gomme da montare</button>
+  <button id="mTol" type="button">Gomme tolte</button>
+</div>
 <div class="dep">
   <button id="bDep" type="button">Deposito</button>
   <button id="bSen" type="button">Senza deposito</button>
@@ -116,6 +124,8 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <div class="blk an">
   <h2>Anteriori</h2>
+  <div class="barra"><button type="button" id="btnScA">Scatta foto</button><button type="button" id="btnLeggiA" class="verde">Leggi</button><button type="button" id="btnSvA" class="rosso">Svuota</button><span class="stato" id="stA">Foto: 0</span></div>
+  <input type="file" id="fA" accept="image/*" capture="environment" hidden>
   <label class="f"><span>Misura</span><input type="text" id="misuraAnt" autocomplete="off"></label>
   <label class="f"><span>Marca e modello</span><input type="text" id="marcaAnt" autocomplete="off"></label>
   <div class="r3">
@@ -127,6 +137,8 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <div class="blk po">
   <h2>Posteriori</h2>
+  <div class="barra"><button type="button" id="btnScP">Scatta foto</button><button type="button" id="btnLeggiP" class="verde">Leggi</button><button type="button" id="btnSvP" class="rosso">Svuota</button><span class="stato" id="stP">Foto: 0</span></div>
+  <input type="file" id="fP" accept="image/*" capture="environment" hidden>
   <label class="f"><span>Misura</span><input type="text" id="misuraPost" autocomplete="off"></label>
   <label class="f"><span>Marca e modello</span><input type="text" id="marcaPost" autocomplete="off"></label>
   <div class="r3">
@@ -159,6 +171,8 @@ function scrivi(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}c
 let archivio=leggi("archivio",[]);
 let cfg=leggi("cfg",{key:"",model:"gpt-4o-mini"});
 let coda=[],inAnalisi=false,dep="";
+const PRE=["misuraAnt","marcaAnt","dotAnt","misuraPost","marcaPost","dotPost","loc"];
+const codaAsse={A:[],P:[]};
 
 let tToast;
 function toast(testo,tipo){
@@ -207,11 +221,19 @@ function scarica(blob,nome){
   setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
 
+function segna(on){for(const k of PRE)$(k).classList.toggle("pre",on&&!!$(k).value)}
+function mostraArrivo(r){
+  if(r.stagione!==stagioneCorrente())return;
+  const a=$("arrivo");
+  a.textContent=r.deposito==="NO"?"SENZA DEPOSITO: gomme non in magazzino":"PRENDI DA: "+(r.loc||"LOCAZIONE NON INDICATA")+(r.marcaAnt?" - "+r.marcaAnt:"")+(r.misuraAnt?" "+r.misuraAnt:"");
+  a.style.display="block";
+}
 // Ricerca per targa: prende la riga della stagione scelta (o 4 stagioni)
 function cerca(pulisci){
   const targa=$("targa").value.toUpperCase().replace(/\s/g,"");
   $("targa").value=targa;
   if(!targa)return;
+  scrivi("bozza",{targa});$("arrivo").style.display="none";segna(false);
   const tutte=archivio.filter(r=>(r.targa||"").toUpperCase()===targa).sort((a,b)=>(b.ts||0)-(a.ts||0));
   if(!tutte.length){toast("TARGA NUOVA: scegli Deposito o Senza deposito","info");return;}
   const st=$("stagione").value;
@@ -220,7 +242,10 @@ function cerca(pulisci){
     for(const k of KEYS){if(!["data","ora","km","targa","deposito",...SP].includes(k))setVal(k,r[k]);}
     for(const k of SP)$(k).value="";
     setDep(r.deposito||"SÌ");
-    toast("SCHEDA "+r.stagione+" CARICATA: misura di nuovo gli spessori","info");
+    mostraArrivo(r);
+    const tolte=r.stagione!==stagioneCorrente();
+    if(tolte)segna(true);
+    toast("SCHEDA "+r.stagione+" CARICATA: misura di nuovo gli spessori"+(tolte?". Campi gialli: da verificare":""),"info");
   }else{
     const a=tutte[0];
     setVal("cliente",a.cliente);setVal("auto",a.auto);setDep(a.deposito||"SÌ");
@@ -234,6 +259,7 @@ function salva(){
   const r=leggiScheda();
   if(!r.targa){toast("INSERISCI ALMENO LA TARGA","avv");return;}
   if(!r.deposito){toast("SCEGLI DEPOSITO O SENZA DEPOSITO","avv");return;}
+  if($("arrivo").style.display!=="none"&&!confirm("Stai salvando le gomme da MONTARE, non quelle tolte da depositare. Salvare lo stesso?"))return;
   const i=archivio.findIndex(x=>x.targa===r.targa&&x.stagione===r.stagione);
   const vecchia=i>=0?archivio[i]:null;
   if(i>=0)archivio[i]=r;else archivio.push(r);
@@ -245,7 +271,9 @@ function nuova(){
     if(k==="xl"||k==="tpms")$(k).checked=false;
     else if(!["data","ora","deposito"].includes(k))$(k).value="";
   }
-  setDep("");
+  setDep("");scrivi("bozza",{});segna(false);$("arrivo").style.display="none";
+  codaAsse.A=[];codaAsse.P=[];$("stA").textContent=$("stP").textContent="Foto: 0";
+  $("mMon").classList.remove("on");$("mTol").classList.remove("on");
   $("stagione").value=stagioneCorrente();
   aggiornaDataOra();
   window.scrollTo(0,0);
@@ -315,6 +343,38 @@ async function analizza(){
   }
 }
 
+const PROMPT_ASSE="Analizza le foto di uno pneumatico (stesso asse). Restituisci un unico JSON con le chiavi esatte: misura (es. 205/55 R16 91V), marca (marca e modello come scritti sul fianco), dot (le 4 cifre dopo DOT: settimana e anno, es. 2319). Usa stringa vuota se non leggibile con certezza. NON inventare e NON indovinare.";
+function modo(id){for(const x of ["mMon","mTol"])$(x).classList.toggle("on",x===id)}
+async function fotoAsse(a,input){
+  for(const f of Array.from(input.files)){try{codaAsse[a].push(await ridimensiona(f))}catch(e){toast("Foto non leggibile: "+f.name,"err")}}
+  input.value="";$("st"+a).textContent="Foto: "+codaAsse[a].length;
+}
+async function leggiAsse(a){
+  if(inAnalisi)return;
+  if(!codaAsse[a].length){toast("SCATTA PRIMA UNA FOTO","avv");return;}
+  if(!cfg.key){toast("INSERISCI LA CHIAVE OPENAI NELLE IMPOSTAZIONI","avv");return;}
+  inAnalisi=true;$("btnLeggi"+a).disabled=true;
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),90000);
+  try{
+    const contenuto=[{type:"text",text:PROMPT_ASSE}];
+    for(const url of codaAsse[a])contenuto.push({type:"image_url",image_url:{url}});
+    const resp=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},body:JSON.stringify({model:cfg.model||"gpt-4o-mini",messages:[{role:"user",content:contenuto}],response_format:{type:"json_object"},max_tokens:300}),signal:ctrl.signal});
+    const j=await resp.json();
+    if(!resp.ok)throw new Error((j.error&&j.error.message)||("Errore "+resp.status));
+    const d=JSON.parse(j.choices[0].message.content);
+    const m={misura:["misuraAnt","misuraPost"],marca:["marcaAnt","marcaPost"],dot:["dotAnt","dotPost"]};
+    let n=0;
+    for(const k in m){
+      const v=String(d[k]??"").trim();if(!v)continue;
+      const x=m[k][a==="A"?0:1];
+      setVal(x,v);$(x).classList.remove("pre");n++;
+      if(a==="A"&&!$(m[k][1]).value)setVal(m[k][1],v);
+    }
+    codaAsse[a]=[];$("st"+a).textContent="Foto: 0";
+    toast(n?"DATI LETTI: controlla e correggi se serve":"NON HO LETTO NIENTE: riprova o scrivi a mano",n?"ok":"avv");
+  }catch(e){toast("ERRORE LETTURA FOTO: "+(e.name==="AbortError"?"Tempo scaduto: riprova":e.message),"err")}
+  finally{clearTimeout(timer);inAnalisi=false;$("btnLeggi"+a).disabled=false}
+}
 // ---- Excel (.xlsx scritto a mano, senza librerie)
 const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
 function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
@@ -435,6 +495,17 @@ function avvia(){
   $("misuraAnt").addEventListener("input",()=>{$("misuraPost").value=$("misuraAnt").value});
   $("marcaAnt").addEventListener("input",()=>{$("marcaPost").value=$("marcaAnt").value});
   $("dotAnt").addEventListener("input",()=>{$("dotPost").value=$("dotAnt").value});
+  for(const a of ["A","P"]){
+    $("btnSc"+a).addEventListener("click",()=>$("f"+a).click());
+    $("f"+a).addEventListener("change",e=>fotoAsse(a,e.target));
+    $("btnLeggi"+a).addEventListener("click",()=>leggiAsse(a));
+    $("btnSv"+a).addEventListener("click",()=>{codaAsse[a]=[];$("st"+a).textContent="Foto: 0"});
+  }
+  $("mMon").addEventListener("click",()=>{$("stagione").value=stagioneCorrente();modo("mMon");cerca(true)});
+  $("mTol").addEventListener("click",()=>{$("stagione").value=stagioneCorrente()==="INVERNALE"?"ESTIVO":"INVERNALE";modo("mTol");cerca(true)});
+  document.addEventListener("input",e=>e.target.classList.remove("pre"));
+  const b=leggi("bozza",{});
+  if(b.targa){$("targa").value=b.targa;cerca(false)}
 }
 avvia();
 </script>

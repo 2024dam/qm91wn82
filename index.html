@@ -48,6 +48,8 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .pre{background:#fff59d!important}
 .arr{background:#0d47a1;color:#fff;border-radius:12px;padding:12px;font-size:22px;font-weight:700;margin-bottom:12px;text-align:center}
 #mMon.on,#mTol.on{background:#1565c0;color:#fff}
+textarea{width:100%;font-size:20px;padding:8px 10px;border:1px solid #aaa;border-radius:10px;font-family:inherit;resize:vertical}
+textarea:focus{outline:3px solid #1e88e5}
 </style>
 </head>
 <body>
@@ -106,17 +108,17 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <div class="blk ru">
   <h2>Ruote</h2>
-  <div class="r3">
-    <label class="f"><span>Quantità</span>
-      <select id="qta"><option value=""></option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
-    <label class="f"><span>Stagione</span>
-      <select id="stagione"><option>ESTIVO</option><option>INVERNALE</option><option>4 STAGIONI</option></select></label>
-    <label class="f"><span>Tipo ruota</span>
-      <select id="tipo"><option value=""></option><option>PNEUMATICO</option><option>RUOTA ACCIAIO</option><option>RUOTA IN LEGA</option></select></label>
-  </div>
-  <div class="r3">
+  <div class="r2">
+    <label class="f"><span>Quantità</span><select id="qta"><option value=""></option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
     <label class="f" id="boxLoc"><span>Locazione</span>
       <div class="loc"><input type="text" id="loc" placeholder="ES. GA1" autocomplete="off"><button id="btnGriglia" class="grigio" type="button">▦</button></div></label>
+  </div>
+  <div class="r2">
+    <label class="f"><span>Stagione</span><select id="stagione"><option>ESTIVO</option><option>INVERNALE</option><option>4 STAGIONI</option></select></label>
+    <label class="f"><span>Tipo ruota</span><select id="tipo"><option value=""></option><option>PNEUMATICO</option><option>RUOTA ACCIAIO</option><option>RUOTA IN LEGA</option></select></label>
+  </div>
+  <div class="r3">
+    <div class="f"><span>Copricerchi</span><label class="chk"><input type="checkbox" id="copri"> SÌ</label></div>
     <div class="f"><span>XL</span><label class="chk"><input type="checkbox" id="xl"> XL</label></div>
     <div class="f"><span>TPMS</span><label class="chk"><input type="checkbox" id="tpms"> TPMS</label></div>
   </div>
@@ -148,6 +150,8 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   </div>
 </div>
 
+<label class="f"><span>Note</span><textarea id="note" rows="4"></textarea></label>
+
 <button id="btnSalva" class="grande">Salva scheda</button>
 <button id="btnNuova" class="grande grigio">Nuova scheda</button>
 
@@ -161,11 +165,12 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const INTEST=["Data","Ora","Targa","KM","Cliente","Marca/Modello Auto","Quantità","Stagione","Tipo Ruota","Locazione","XL","TPMS","Misura Ant","Marca Ant","Ant SX (mm)","DOT Ant","Ant DX (mm)","Post SX (mm)","DOT Post","Post DX (mm)","Misura Post","Marca Post","Deposito"];
-const KEYS=["data","ora","targa","km","cliente","auto","qta","stagione","tipo","loc","xl","tpms","misuraAnt","marcaAnt","antSx","dotAnt","antDx","postSx","dotPost","postDx","misuraPost","marcaPost","deposito"];
+const INTEST=["Data","Ora","Targa","KM","Cliente","Marca/Modello Auto","Quantità","Stagione","Tipo Ruota","Locazione","XL","TPMS","Misura Ant","Marca Ant","Ant SX (mm)","DOT Ant","Ant DX (mm)","Post SX (mm)","DOT Post","Post DX (mm)","Misura Post","Marca Post","Deposito","Copricerchi","Note"];
+const KEYS=["data","ora","targa","km","cliente","auto","qta","stagione","tipo","loc","xl","tpms","misuraAnt","marcaAnt","antSx","dotAnt","antDx","postSx","dotPost","postDx","misuraPost","marcaPost","deposito","copri","note"];
 const SP=["antSx","antDx","postSx","postDx"];
-const GOMME=["qta","tipo","loc","xl","tpms","misuraAnt","marcaAnt","dotAnt","misuraPost","marcaPost","dotPost",...SP];
+const GOMME=["qta","tipo","loc","xl","tpms","copri","note","misuraAnt","marcaAnt","dotAnt","misuraPost","marcaPost","dotPost",...SP];
 
+const norm=t=>String(t||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 function leggi(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}}
 function scrivi(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){toast("ERRORE: memoria del telefono piena o bloccata","err");return false}}
 let archivio=leggi("archivio",[]);
@@ -190,8 +195,8 @@ function aggiornaDataOra(){
   $("ora").value=o.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
 }
 function setVal(k,v){
-  if(k==="xl"||k==="tpms")$(k).checked=["SÌ","SI","TRUE","1"].includes(String(v).toUpperCase());
-  else $(k).value=String(v??"").toUpperCase();
+  if(k==="xl"||k==="tpms"||k==="copri")$(k).checked=["SÌ","SI","TRUE","1"].includes(String(v).toUpperCase());
+  else $(k).value=k==="note"?String(v??""):String(v??"").toUpperCase();
 }
 function setDep(v){
   dep=v;
@@ -205,9 +210,10 @@ function leggiScheda(){
   const r={};
   for(const k of KEYS){
     if(k==="deposito")r[k]=dep;
-    else if(k==="xl"||k==="tpms")r[k]=$(k).checked?"SÌ":"NO";
-    else r[k]=($(k).value||"").trim().toUpperCase();
+    else if(k==="xl"||k==="tpms"||k==="copri")r[k]=$(k).checked?"SÌ":"NO";
+    else{const t=($(k).value||"").trim();r[k]=k==="note"?t:t.toUpperCase();}
   }
+  r.targa=norm(r.targa);
   r.ts=Date.now();
   return r;
 }
@@ -230,11 +236,11 @@ function mostraArrivo(r){
 }
 // Ricerca per targa: prende la riga della stagione scelta (o 4 stagioni)
 function cerca(pulisci){
-  const targa=$("targa").value.toUpperCase().replace(/\s/g,"");
+  const targa=norm($("targa").value);
   $("targa").value=targa;
   if(!targa)return;
   scrivi("bozza",{targa});$("arrivo").style.display="none";segna(false);
-  const tutte=archivio.filter(r=>(r.targa||"").toUpperCase()===targa).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const tutte=archivio.filter(r=>norm(r.targa)===targa).sort((a,b)=>(b.ts||0)-(a.ts||0));
   if(!tutte.length){toast("TARGA NUOVA: scegli Deposito o Senza deposito","info");return;}
   const st=$("stagione").value;
   const r=tutte.find(x=>x.stagione===st)||tutte.find(x=>x.stagione==="4 STAGIONI");
@@ -260,7 +266,7 @@ function salva(){
   if(!r.targa){toast("INSERISCI ALMENO LA TARGA","avv");return;}
   if(!r.deposito){toast("SCEGLI DEPOSITO O SENZA DEPOSITO","avv");return;}
   if($("arrivo").style.display!=="none"&&!confirm("Stai salvando le gomme da MONTARE, non quelle tolte da depositare. Salvare lo stesso?"))return;
-  const i=archivio.findIndex(x=>x.targa===r.targa&&x.stagione===r.stagione);
+  const i=archivio.findIndex(x=>norm(x.targa)===r.targa&&x.stagione===r.stagione);
   const vecchia=i>=0?archivio[i]:null;
   if(i>=0)archivio[i]=r;else archivio.push(r);
   if(scrivi("archivio",archivio)){aggiornaStato();toast(i>=0?"SCHEDA AGGIORNATA SUL TELEFONO":"SCHEDA SALVATA SUL TELEFONO");}
@@ -268,7 +274,7 @@ function salva(){
 }
 function nuova(){
   for(const k of KEYS){
-    if(k==="xl"||k==="tpms")$(k).checked=false;
+    if(k==="xl"||k==="tpms"||k==="copri")$(k).checked=false;
     else if(!["data","ora","deposito"].includes(k))$(k).value="";
   }
   setDep("");scrivi("bozza",{});segna(false);$("arrivo").style.display="none";
@@ -322,7 +328,7 @@ async function analizza(){
     if(!resp.ok)throw new Error((j.error&&j.error.message)||("Errore "+resp.status));
     const d=JSON.parse(j.choices[0].message.content);
     const v=k=>String(d[k]??"").trim();
-    if(v("targa")){$("targa").value=v("targa").toUpperCase().replace(/\s/g,"");cerca(false);}
+    if(v("targa")){$("targa").value=norm(v("targa"));cerca(false);}
     if(v("cliente"))setVal("cliente",v("cliente"));
     if(v("marca_auto"))setVal("auto",v("marca_auto"));
     if(v("misura_ant")){setVal("misuraAnt",v("misura_ant"));setVal("misuraPost",v("misura_ant"));}
@@ -434,7 +440,7 @@ function creaXlsx(righe){
 }
 function esportaExcel(){
   if(!archivio.length){toast("NESSUNA SCHEDA SALVATA","avv");return;}
-  const righe=[INTEST,...archivio.map(r=>KEYS.map(k=>k==="deposito"?(r[k]||"SÌ"):(r[k]??"")))];
+  const righe=[INTEST,...archivio.map(r=>KEYS.map(k=>k==="targa"?norm(r[k]):k==="deposito"?(r[k]||"SÌ"):(r[k]??"")))];
   scarica(new Blob([creaXlsx(righe)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),"archivio_pneumatici.xlsx");
 }
 function backup(){scarica(new Blob([JSON.stringify(archivio)],{type:"application/json"}),"backup_pneumatici.json")}
